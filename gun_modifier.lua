@@ -35,63 +35,61 @@ ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 ScreenGui.Parent = CoreGui
 
 -- Icon Image (Minimized State)
-local function CreateIcon()
-    local Icon = Instance.new("TextButton")
-    Icon.Name = "GenocideIcon"
-    Icon.Size = UDim2.new(0, 60, 0, 60)
-    Icon.Position = isMobile and UDim2.new(0.85, 0, 0.85, 0) or UDim2.new(0.85, 0, 0.05, 0)
-    Icon.BackgroundTransparency = 1
-    Icon.Text = ""
-    Icon.ZIndex = 10
-    
-    -- Create icon image
-    local Img = Instance.new("ImageLabel")
-    Img.Name = "IconImage"
-    Img.Size = UDim2.new(1, 0, 1, 0)
-    Img.Image = "rbxassetid://6031068421"  -- Roblox combat icon
-    Img.ImageColor3 = ACCENT_COLOR
-    Img.Parent = Icon
-    
-    local Corner = Instance.new("UICorner")
-    Corner.CornerRadius = UDim.new(0, 12)
-    Corner.Parent = Icon
-    
-    -- Dragging for icon
-    local dragging, dragStart, startPos
-    Icon.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            dragging = true
-            dragStart = input.Position
-            startPos = Icon.Position
-        end
-    end)
-    
-    UserInputService.InputChanged:Connect(function(input)
-        if dragging and input.UserInputType == Enum.UserInputType.Touch then
-            local delta = input.Position - dragStart
-            Icon.Position = UDim2.new(
-                startPos.X.Scale,
-                startPos.X.Offset + delta.X,
-                startPos.Y.Scale,
-                startPos.Y.Offset + delta.Y
-            )
-        end
-    end)
-    
-    UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Touch then
-            dragging = false
-        end
-    end)
-    
-    -- Click to toggle
-    Icon.MouseButton1Click:Connect(function()
-        MainFrame.Visible = not MainFrame.Visible
-        Icon.Visible = not MainFrame.Visible
-    end)
-    
-    return Icon
-end
+local Icon = Instance.new("TextButton")
+Icon.Name = "GenocideIcon"
+Icon.Size = UDim2.new(0, 60, 0, 60)
+Icon.Position = isMobile and UDim2.new(0.85, 0, 0.85, 0) or UDim2.new(0.85, 0, 0.05, 0)
+Icon.BackgroundTransparency = 1
+Icon.Text = ""
+Icon.ZIndex = 10
+
+-- Create icon image
+local Img = Instance.new("ImageLabel")
+Img.Name = "IconImage"
+Img.Size = UDim2.new(1, 0, 1, 0)
+Img.Image = "rbxassetid://6031068421"  -- Roblox combat icon
+Img.ImageColor3 = ACCENT_COLOR
+Img.Parent = Icon
+
+local Corner = Instance.new("UICorner")
+Corner.CornerRadius = UDim.new(0, 12)
+Corner.Parent = Icon
+
+-- Dragging for icon
+local dragging, dragStart, startPos
+Icon.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = Icon.Position
+    end
+end)
+
+UserInputService.InputChanged:Connect(function(input)
+    if dragging and input.UserInputType == Enum.UserInputType.Touch then
+        local delta = input.Position - dragStart
+        Icon.Position = UDim2.new(
+            startPos.X.Scale,
+            startPos.X.Offset + delta.X,
+            startPos.Y.Scale,
+            startPos.Y.Offset + delta.Y
+        )
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Click to toggle
+Icon.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
+    Icon.Visible = not MainFrame.Visible
+end)
+
+print("Icon created and visible:", Icon.Visible) -- Debug line
 
 -- Main Frame
 local MainFrame = Instance.new("Frame")
@@ -244,10 +242,10 @@ local function CreateToggle(name, callback)
     return Toggle
 end
 
--- Gun Mod Script (AMMO BUG FIX)
+-- Gun Mod Script (AMMO BUG FIX - AGGRESSIVE)
 local gunModEnabled = false
-local originalGunSettings = {}
 local gunStates = {} -- For state preservation
+local gunLoopConnection = nil
 
 local function ToggleGunMod(enabled)
     gunModEnabled = enabled
@@ -264,12 +262,13 @@ local function ToggleGunMod(enabled)
         end
 
         if enabled then
-            -- CRITICAL FIX: Set ammo per shot to 0
+            -- AGGRESSIVE FIX: Set multiple properties to ensure no ammo consumption
             local newSettings = {
                 MaxDamage = 999,
                 MinDamage = 999,
                 AmmoCount = math.huge,
                 AmmoPerShot = 0, -- Prevents ammo consumption
+                MaxShots = math.huge, -- Unlimited shots
                 HeadshotMultiplier = 10,
                 ReloadSpeed = 0.01,
                 firerate = 0.01,
@@ -282,7 +281,10 @@ local function ToggleGunMod(enabled)
                 teamkill = false,
                 Weight = -999,
                 Suppression = 0,
-                MaxShots = math.huge -- Unlimited shots
+                -- Additional properties that might affect ammo
+                clipSize = math.huge,
+                currentAmmo = math.huge,
+                ammoPerShot = 0
             }
 
             for _, gunModule in ipairs(gunSettingsFolder:GetChildren()) do
@@ -295,7 +297,9 @@ local function ToggleGunMod(enabled)
                             gunStates[gunModule.Name] = {
                                 AmmoCount = settings.AmmoCount,
                                 AmmoPerShot = settings.AmmoPerShot,
-                                MaxShots = settings.MaxShots
+                                MaxShots = settings.MaxShots,
+                                clipSize = settings.clipSize or settings.MaxShots,
+                                currentAmmo = settings.currentAmmo or settings.AmmoCount
                             }
                         end
 
@@ -312,7 +316,35 @@ local function ToggleGunMod(enabled)
             end
 
             print("🔥 ALL WEAPONS OVERPOWERED! 🔥")
+            
+            -- Start aggressive state restoration loop
+            if gunLoopConnection then gunLoopConnection:Disconnect() end
+            gunLoopConnection = RunService.Heartbeat:Connect(function()
+                if gunModEnabled then
+                    for _, gunModule in ipairs(gunSettingsFolder:GetChildren()) do
+                        if gunModule:IsA("ModuleScript") then
+                            pcall(function()
+                                local settings = require(gunModule)
+                                if gunStates[gunModule.Name] then
+                                    settings.AmmoCount = gunStates[gunModule.Name].AmmoCount
+                                    settings.AmmoPerShot = gunStates[gunModule.Name].AmmoPerShot
+                                    settings.MaxShots = gunStates[gunModule.Name].MaxShots
+                                    settings.clipSize = gunStates[gunModule.Name].clipSize
+                                    settings.currentAmmo = gunStates[gunModule.Name].currentAmmo
+                                end
+                            end)
+                        end
+                    end
+                end
+            end)
+            
         else
+            -- Stop the aggressive loop
+            if gunLoopConnection then
+                gunLoopConnection:Disconnect()
+                gunLoopConnection = nil
+            end
+            
             -- Restore original state
             for _, gunModule in ipairs(gunSettingsFolder:GetChildren()) do
                 if gunModule:IsA("ModuleScript") then
@@ -322,6 +354,8 @@ local function ToggleGunMod(enabled)
                             settings.AmmoCount = gunStates[gunModule.Name].AmmoCount
                             settings.AmmoPerShot = gunStates[gunModule.Name].AmmoPerShot
                             settings.MaxShots = gunStates[gunModule.Name].MaxShots
+                            settings.clipSize = gunStates[gunModule.Name].clipSize
+                            settings.currentAmmo = gunStates[gunModule.Name].currentAmmo
                         end
                     end)
                 end
@@ -609,9 +643,6 @@ CreateToggle("🛡️ Godmode", ToggleGodmode)
 CreateToggle("🏃 Speed Hack", ToggleSpeedHack)
 CreateToggle("🎯 Aimbot", ToggleAimbot)
 CreateToggle("👁️ ESP", ToggleESP)
-
--- Create Icon
-local Icon = CreateIcon()
 
 -- Auto-reconnect features on respawn
 LocalPlayer.CharacterAdded:Connect(function(char)
