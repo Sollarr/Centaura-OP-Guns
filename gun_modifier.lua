@@ -312,7 +312,3 @@ UserInputService.InputEnded:Connect(function(input)
 end)
 
 print("Genocide Hub Loaded! Press the toggles to enable features. UwU")
-    end
-end
-
-print("🔥 ALL WEAPONS ARE NOW OVERPOWERED! 🔥")
