@@ -1,451 +1,590 @@
---[[ 
-    GENOCIDE GUI - Mobile-Optimized Fix for Centaura Fire Bug
-    Features: Touch-Friendly, State Preservation, Optimized Loop
-]]
+-- Genocide Hub for Centaura (MOBILE OPTIMIZED - FIRE BUG FIXED)
+-- By VleisBeun (Revised & Optimized)
+-- This is a Roblox script that creates a GUI hub with toggles for various features
+-- Paste this into a Roblox exploit executor like Synapse X or Krnl to run it in the game Centaura.
+-- Note: This is for educational purposes only. Using exploits can result in bans from Roblox. Use at your own risk.
 
 local Players = game:GetService("Players")
-local CoreGui = game:GetService("CoreGui")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local TweenService = game:GetService("TweenService")
+local LocalPlayer = Players.LocalPlayer
 local UserInputService = game:GetService("UserInputService")
-local StarterGui = game:GetService("StarterGui")
-
--- // CONFIGURATION // --
-local GUI_COLOR = Color3.fromRGB(30, 30, 30)
-local ACCENT_COLOR = Color3.fromRGB(255, 0, 0)
-local TEXT_COLOR = Color3.fromRGB(255, 255, 255)
-local SUCCESS_COLOR = Color3.fromRGB(50, 200, 50)
+local RunService = game:GetService("RunService")
+local Workspace = game:GetService("Workspace")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
 -- Mobile detection
 local isMobile = UserInputService.TouchEnabled and not UserInputService.KeyboardEnabled
 
--- // CLEANUP EXISTING GUI // --
-pcall(function()
-    if CoreGui:FindFirstChild("GenocideGUI") then
-        CoreGui.GenocideGUI:Destroy()
-    end
-end)
-
--- // LOGIC VARIABLES // --
-local isEnabled = false
-local isMinimized = false
-local loopConnection = nil
-local gunModules = {}
-local originalValues = {}
-local lastApplyTime = 0
-local APPLY_INTERVAL = 0.5 -- Apply mods every 0.5 seconds (reduces mobile lag)
-
--- // CRITICAL FIX: PRESERVE GUN STATE // --
-local gunStates = {} -- Stores original gun states to restore after shot
-
--- // MODS TABLE (MOBILE SAFE) // --
-local mods = {
-    -- Damage
-    Damage = 999,
-    MaxDamage = 999,
-    MinDamage = 999,
-    HeadshotMultiplier = 100,
-    BodyShotMultiplier = 100,
-    
-    -- Accuracy & Recoil
-    Spread = 0,
-    spread = 0,
-    Recoil = 0,
-    recoil = 0,
-    crouchSpread = 0,
-    HipFireAccuracy = 0,
-    ZoomAccuracy = 0,
-    
-    -- Fire Rate & Range
-    Range = 99999,
-    range = 99999,
-    FireRate = 0.001,
-    firerate = 0.001,
-    BulletSpeed = 9999,
-    
-    -- Reload & Equipment
-    prepTime = 0.01,
-    equipTime = 0.01,
-    ReloadSpeed = 0.01,
-    ReloadAnimationSpeed = 0.01,
-    
-    -- Ammo (CRITICAL FIX)
-    MaxShots = math.huge,
-    AmmoCount = math.huge,      -- Infinite ammo
-    AmmoPerShot = 0,            -- Keep at 0 (doesn't consume ammo)
-    AmmoPerMagazine = math.huge,
-    
-    -- Additional
-    Penetration = 999,
-    ShellsPerShot = 1,
-    Weight = -999,
-    Suppression = 0,
-    teamkill = false
-}
-
--- // NOTIFICATION SYSTEM // --
-local function Notify(title, text, duration)
-    pcall(function()
-        StarterGui:SetCore("SendNotification", {
-            Title = title,
-            Text = text,
-            Duration = duration or 3
-        })
-    end)
+-- Cleanup previous instance if exists
+if game.CoreGui:FindFirstChild("GenocideHub") then
+    game.CoreGui:FindFirstChild("GenocideHub"):Destroy()
 end
 
--- // FIND GUN MODULES (MOBILE SAFE) // --
-local function FindGunModules()
-    gunModules = {}
-    
-    local searchPaths = {
-        ReplicatedStorage:FindFirstChild("GunScripts"),
-        ReplicatedStorage:FindFirstChild("TREKModules"),
-        ReplicatedStorage:FindFirstChild("GunSettings"),
-        ReplicatedStorage:FindFirstChild("WeaponModules"),
-        ReplicatedStorage
-    }
-    
-    for _, container in ipairs(searchPaths) do
-        if container then
-            for _, child in ipairs(container:GetDescendants()) do
-                if child:IsA("ModuleScript") then
-                    local name = child.Name:lower()
-                    if name:find("gun") or name:find("weapon") or name:find("stats") then
-                        table.insert(gunModules, child)
-                    end
-                end
-            end
-        end
-    end
-    
-    return #gunModules > 0
-end
-
--- // GUI CREATION (MOBILE OPTIMIZED) // --
+-- GUI Setup using Roblox's ScreenGui
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "GenocideGUI"
+ScreenGui.Name = "GenocideHub"
 ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game.CoreGui
 
-pcall(function() ScreenGui.Parent = CoreGui end)
-if not ScreenGui.Parent then 
-    ScreenGui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui") 
-end
+-- Main Frame (LARGER FOR MOBILE)
+local Frame = Instance.new("Frame")
+Frame.Size = isMobile and UDim2.new(0, 340, 0, 520) or UDim2.new(0, 320, 0, 450)
+Frame.Position = isMobile and UDim2.new(0.5, -170, 0.5, -260) or UDim2.new(0.5, -160, 0.5, -225)
+Frame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+Frame.BorderSizePixel = 2
+Frame.BorderColor3 = Color3.fromRGB(255, 0, 0)
+Frame.Active = true
+Frame.Draggable = true
+Frame.Parent = ScreenGui
 
--- Main Frame (POSITIONED FOR MOBILE THUMB REACH)
-local MainFrame = Instance.new("Frame")
-MainFrame.Name = "MainFrame"
-MainFrame.Size = isMobile and UDim2.new(0, 280, 0, 160) or UDim2.new(0, 220, 0, 120)
-MainFrame.Position = isMobile and UDim2.new(0.5, -140, 0.7, -80) or UDim2.new(0.1, 0, 0.1, 0)
-MainFrame.BackgroundColor3 = GUI_COLOR
-MainFrame.BorderSizePixel = 0
-MainFrame.ClipsDescendants = true
-MainFrame.Active = true
-MainFrame.Parent = ScreenGui
-
+-- Add rounded corners
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = MainFrame
-
--- Shadow for depth
-local Shadow = Instance.new("ImageLabel")
-Shadow.Name = "Shadow"
-Shadow.BackgroundTransparency = 1
-Shadow.Position = UDim2.new(0, -15, 0, -15)
-Shadow.Size = UDim2.new(1, 30, 1, 30)
-Shadow.Image = "rbxassetid://1316045217"
-Shadow.ImageColor3 = Color3.new(0, 0, 0)
-Shadow.ImageTransparency = 0.7
-Shadow.ScaleType = Enum.ScaleType.Slice
-Shadow.SliceCenter = Rect.new(10, 10, 118, 118)
-Shadow.Parent = MainFrame
+UICorner.Parent = Frame
 
 -- Title Bar
-local TitleBar = Instance.new("Frame")
-TitleBar.Name = "TitleBar"
-TitleBar.Size = UDim2.new(1, 0, 0, isMobile and 45 or 30)
-TitleBar.BackgroundColor3 = ACCENT_COLOR
-TitleBar.BorderSizePixel = 0
-TitleBar.Parent = MainFrame
+local Title = Instance.new("TextLabel")
+Title.Size = UDim2.new(1, 0, 0, isMobile and 60 or 50)
+Title.BackgroundColor3 = Color3.fromRGB(15, 15, 15)
+Title.Text = "🔥 GENOCIDE HUB 🔥"
+Title.TextColor3 = Color3.fromRGB(255, 50, 50)
+Title.TextSize = isMobile and 26 or 22
+Title.Font = Enum.Font.GothamBold
+Title.BorderSizePixel = 0
+Title.Parent = Frame
 
 local TitleCorner = Instance.new("UICorner")
 TitleCorner.CornerRadius = UDim.new(0, 12)
-TitleCorner.Parent = TitleBar
+TitleCorner.Parent = Title
 
-local BottomCover = Instance.new("Frame")
-BottomCover.Name = "BottomCover"
-BottomCover.Size = UDim2.new(1, 0, 0, 10)
-BottomCover.Position = UDim2.new(0, 0, 1, -10)
-BottomCover.BackgroundColor3 = ACCENT_COLOR
-BottomCover.BorderSizePixel = 0
-BottomCover.Parent = TitleBar
+-- Credits
+local Credits = Instance.new("TextLabel")
+Credits.Size = UDim2.new(1, 0, 0, isMobile and 30 or 25)
+Credits.Position = UDim2.new(0, 0, 0, isMobile and 60 or 50)
+Credits.BackgroundTransparency = 1
+Credits.Text = "By VleisBeun | Centaura Exploit"
+Credits.TextColor3 = Color3.fromRGB(150, 150, 150)
+Credits.TextSize = isMobile and 16 or 14
+Credits.Font = Enum.Font.Gotham
+Credits.Parent = Frame
 
-local TitleLabel = Instance.new("TextLabel")
-TitleLabel.Name = "TitleLabel"
-TitleLabel.Size = UDim2.new(1, -50, 1, 0)
-TitleLabel.BackgroundTransparency = 1
-TitleLabel.Text = "GENOCIDE"
-TitleLabel.TextColor3 = TEXT_COLOR
-TitleLabel.Font = Enum.Font.GothamBold
-TitleLabel.TextSize = isMobile and 20 or 16
-TitleLabel.Parent = TitleBar
+-- Close Button (LARGER FOR MOBILE)
+local CloseButton = Instance.new("TextButton")
+CloseButton.Size = isMobile and UDim2.new(0, 50, 0, 50) or UDim2.new(0, 40, 0, 40)
+CloseButton.Position = isMobile and UDim2.new(1, -55, 0, 5) or UDim2.new(1, -45, 0, 5)
+CloseButton.BackgroundColor3 = Color3.fromRGB(200, 0, 0)
+CloseButton.Text = "X"
+CloseButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+CloseButton.TextSize = isMobile and 26 or 20
+CloseButton.Font = Enum.Font.GothamBold
+CloseButton.Parent = Frame
 
--- Minimize Button (LARGER FOR TOUCH)
-local MinimizeButton = Instance.new("TextButton")
-MinimizeButton.Name = "MinimizeButton"
-MinimizeButton.Size = UDim2.new(0, isMobile and 45 or 30, 0, isMobile and 45 or 30)
-MinimizeButton.Position = UDim2.new(1, isMobile and -45 or -30, 0, 0)
-MinimizeButton.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-MinimizeButton.Text = "-"
-MinimizeButton.TextColor3 = TEXT_COLOR
-MinimizeButton.Font = Enum.Font.GothamBold
-MinimizeButton.TextSize = isMobile and 28 or 20
-MinimizeButton.AutoButtonColor = false
-MinimizeButton.Parent = TitleBar
+local CloseCorner = Instance.new("UICorner")
+CloseCorner.CornerRadius = UDim.new(0, 8)
+CloseCorner.Parent = CloseButton
 
-local MinCorner = Instance.new("UICorner")
-MinCorner.CornerRadius = UDim.new(0, 8)
-MinCorner.Parent = MinimizeButton
-
--- Status Label
-local StatusLabel = Instance.new("TextLabel")
-StatusLabel.Name = "StatusLabel"
-StatusLabel.Size = UDim2.new(0.9, 0, 0, isMobile and 25 or 20)
-StatusLabel.Position = UDim2.new(0.05, 0, 0, isMobile and 50 or 35)
-StatusLabel.BackgroundTransparency = 1
-StatusLabel.Text = "Ready"
-StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
-StatusLabel.Font = Enum.Font.Gotham
-StatusLabel.TextSize = isMobile and 14 or 12
-StatusLabel.Parent = MainFrame
-
--- Toggle Button (EXTRA LARGE FOR MOBILE)
-local ToggleButton = Instance.new("TextButton")
-ToggleButton.Name = "ToggleButton"
-ToggleButton.Size = isMobile and UDim2.new(0.85, 0, 0, 50) or UDim2.new(0.8, 0, 0, 35)
-ToggleButton.Position = isMobile and UDim2.new(0.075, 0, 0, 85) or UDim2.new(0.1, 0, 0, 60)
-ToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-ToggleButton.Text = "OFF"
-ToggleButton.TextColor3 = TEXT_COLOR
-ToggleButton.Font = Enum.Font.GothamBold
-ToggleButton.TextSize = isMobile and 24 or 18
-ToggleButton.AutoButtonColor = false
-ToggleButton.Parent = MainFrame
-
-local ToggleCorner = Instance.new("UICorner")
-ToggleCorner.CornerRadius = UDim.new(0, 8)
-ToggleCorner.Parent = ToggleButton
-
--- // TOUCH DRAGGING (MOBILE SAFE) // --
-local dragging = false
-local dragStart = nil
-local startPos = nil
-
-TitleBar.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        dragging = true
-        dragStart = input.Position
-        startPos = MainFrame.Position
-    end
+CloseButton.MouseButton1Click:Connect(function()
+    ScreenGui:Destroy()
 end)
 
-TitleBar.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch then
-        dragging = false
-    end
+-- Scroll Frame for toggles
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, -20, 1, isMobile and -100 or -85)
+ScrollFrame.Position = UDim2.new(0, 10, 0, isMobile and 90 or 75)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.ScrollBarThickness = isMobile and 10 or 6
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(255, 0, 0)
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.Parent = Frame
+
+local UIListLayout = Instance.new("UIListLayout")
+UIListLayout.Padding = UDim.new(0, isMobile and 12 or 8)
+UIListLayout.SortOrder = Enum.SortOrder.LayoutOrder
+UIListLayout.Parent = ScrollFrame
+
+-- Auto-resize canvas
+UIListLayout:GetPropertyChangedSignal("AbsoluteContentSize"):Connect(function()
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, UIListLayout.AbsoluteContentSize.Y + 10)
 end)
 
-UserInputService.InputChanged:Connect(function(input)
-    if dragging and input.UserInputType == Enum.UserInputType.Touch then
-        local delta = input.Position - dragStart
-        MainFrame.Position = UDim2.new(
-            startPos.X.Scale,
-            startPos.X.Offset + delta.X,
-            startPos.Y.Scale,
-            startPos.Y.Offset + delta.Y
-        )
-    end
-end)
+-- Function to create toggle buttons (MOBILE OPTIMIZED)
+local function CreateToggle(name, callback)
+    local ToggleFrame = Instance.new("Frame")
+    ToggleFrame.Size = isMobile and UDim2.new(1, 0, 0, 60) or UDim2.new(1, 0, 0, 45)
+    ToggleFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+    ToggleFrame.BorderSizePixel = 0
+    ToggleFrame.Parent = ScrollFrame
 
--- // MINIMIZE LOGIC // --
-MinimizeButton.MouseButton1Click:Connect(function()
-    isMinimized = not isMinimized
-    
-    local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
-    
-    if isMinimized then
-        StatusLabel.Visible = false
-        ToggleButton.Visible = false
-        TitleLabel.Text = "G"
-        MinimizeButton.Text = "+"
-        BottomCover.Visible = false
+    local FrameCorner = Instance.new("UICorner")
+    FrameCorner.CornerRadius = UDim.new(0, 8)
+    FrameCorner.Parent = ToggleFrame
+
+    local Label = Instance.new("TextLabel")
+    Label.Size = UDim2.new(0.6, 0, 1, 0)
+    Label.Position = UDim2.new(0, 15, 0, 0)
+    Label.BackgroundTransparency = 1
+    Label.Text = name
+    Label.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Label.TextSize = isMobile and 20 or 16
+    Label.Font = Enum.Font.GothamSemibold
+    Label.TextXAlignment = Enum.TextXAlignment.Left
+    Label.Parent = ToggleFrame
+
+    local ToggleButton = Instance.new("TextButton")
+    ToggleButton.Size = isMobile and UDim2.new(0.32, 0, 0, 40) or UDim2.new(0.28, 0, 0, 30)
+    ToggleButton.Position = isMobile and UDim2.new(0.63, 0, 0.5, -20) or UDim2.new(0.68, 0, 0.5, -15)
+    ToggleButton.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    ToggleButton.Text = "OFF"
+    ToggleButton.TextColor3 = Color3.fromRGB(255, 80, 80)
+    ToggleButton.TextSize = isMobile and 18 or 14
+    ToggleButton.Font = Enum.Font.GothamBold
+    ToggleButton.Parent = ToggleFrame
+
+    local ButtonCorner = Instance.new("UICorner")
+    ButtonCorner.CornerRadius = UDim.new(0, 6)
+    ButtonCorner.Parent = ToggleButton
+
+    local enabled = false
+    ToggleButton.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        ToggleButton.Text = enabled and "ON" or "OFF"
+        ToggleButton.TextColor3 = enabled and Color3.fromRGB(50, 255, 50) or Color3.fromRGB(255, 80, 80)
+        ToggleButton.BackgroundColor3 = enabled and Color3.fromRGB(40, 80, 40) or Color3.fromRGB(60, 60, 60)
         
-        local targetSize = isMobile and UDim2.new(0, 70, 0, 70) or UDim2.new(0, 50, 0, 50)
-        TweenService:Create(MainFrame, tweenInfo, {Size = targetSize}):Play()
-        TweenService:Create(TitleBar, tweenInfo, {Size = UDim2.new(1, 0, 1, 0)}):Play()
+        -- Visual feedback
+        local originalSize = ToggleButton.Size
+        ToggleButton.Size = enabled and (originalSize - UDim2.new(0, 4, 0, 4)) or originalSize
+        wait(0.1)
+        ToggleButton.Size = originalSize
         
-        TitleLabel.TextSize = isMobile and 32 or 24
-    else
-        local targetSize = isMobile and UDim2.new(0, 280, 0, 160) or UDim2.new(0, 220, 0, 120)
-        TweenService:Create(MainFrame, tweenInfo, {Size = targetSize}):Play()
-        TweenService:Create(TitleBar, tweenInfo, {Size = UDim2.new(1, 0, 0, isMobile and 45 or 30)}):Play()
-        
-        task.wait(0.2)
-        StatusLabel.Visible = true
-        ToggleButton.Visible = true
-        TitleLabel.Text = "GENOCIDE"
-        MinimizeButton.Text = "-"
-        BottomCover.Visible = true
-        TitleLabel.TextSize = isMobile and 20 or 16
-    end
-end)
-
--- // CRITICAL: PRESERVE GUN STATE BEFORE MODIFICATION // --
-local function BackupGunState(gunStats)
-    for gunName, gun in pairs(gunStats) do
-        if not gunStates[gunName] then
-            gunStates[gunName] = {
-                AmmoCount = gun.AmmoCount,
-                AmmoPerShot = gun.AmmoPerShot,
-                MaxShots = gun.MaxShots
-            }
-        end
-    end
-end
-
--- // APPLY MODS (MOBILE SAFE WITH STATE PRESERVATION) // --
-local function ApplyMods()
-    local modified = 0
-    
-    for _, moduleScript in ipairs(gunModules) do
-        local success, gunStats = pcall(require, moduleScript)
-        if success and type(gunStats) == "table" then
-            
-            -- Backup original state FIRST TIME
-            if not gunStates[moduleScript] then
-                BackupGunState(gunStats)
-                gunStates[moduleScript] = true
-            end
-            
-            for gunName, gun in pairs(gunStats) do
-                if type(gun) == "table" then
-                    local changed = false
-                    
-                    for prop, value in pairs(mods) do
-                        if gun[prop] ~= value then
-                            gun[prop] = value
-                            changed = true
-                        end
-                    end
-                    
-                    if changed then
-                        modified = modified + 1
-                    end
-                end
-            end
-        end
-    end
-    
-    return modified
-end
-
--- // RESTORE ORIGINAL STATE AFTER SHOT (FIXES FIRE BUTTON BUG) // --
-local function RestoreAfterShot()
-    for _, moduleScript in ipairs(gunModules) do
-        local success, gunStats = pcall(require, moduleScript)
-        if success and type(gunStats) == "table" then
-            for gunName, gun in pairs(gunStats) do
-                if gunStates[gunName] then
-                    -- Reset ONLY ammo-related values
-                    gun.AmmoCount = gunStates[gunName].AmmoCount
-                    gun.AmmoPerShot = gunStates[gunName].AmmoPerShot
-                    gun.MaxShots = gunStates[gunName].MaxShots
-                end
-            end
-        end
-    end
-end
-
--- // DETECT SHOT AND RESTORE STATE (MOBILE TOUCH DETECTION) // --
-local function SetupShotDetection()
-    -- Detect mobile fire button touch
-    UserInputService.TouchTapInWorld:Connect(function(touch)
-        -- Short delay to let game process shot
-        task.delay(0.1, function()
-            RestoreAfterShot()
-        end)
+        callback(enabled)
     end)
 end
 
--- // INITIALIZATION // --
-local foundModules = FindGunModules()
+-- Gun Mod Script (FIXED FOR CENTAURA - NO FIRE BUTTON BREAK)
+local gunModEnabled = false
+local originalGunSettings = {}
 
-if foundModules then
-    StatusLabel.Text = "Found " .. #gunModules .. " module(s)"
-    StatusLabel.TextColor3 = SUCCESS_COLOR
-    Notify("GENOCIDE", "Found gun modules! Ready to activate.", 2)
-else
-    StatusLabel.Text = "Searching modules..."
-    StatusLabel.TextColor3 = Color3.fromRGB(255, 200, 0)
-end
-
--- // TOGGLE LOGIC (MOBILE SAFE) // --
-ToggleButton.MouseButton1Click:Connect(function()
-    isEnabled = not isEnabled
+local function ToggleGunMod(enabled)
+    gunModEnabled = enabled
     
-    if isEnabled then
-        -- Double-check modules
-        if #gunModules == 0 then
-            FindGunModules()
-            if #gunModules == 0 then
-                Notify("ERROR", "No gun modules found!", 3)
-                isEnabled = false
-                return
+    local success, err = pcall(function()
+        -- Try multiple possible paths for Centaura
+        local gunSettingsFolder = nil
+        
+        local paths = {
+            ReplicatedStorage:FindFirstChild("TREKModules"),
+            ReplicatedStorage:FindFirstChild("GunScripts"),
+            ReplicatedStorage:FindFirstChild("GunSettings"),
+            ReplicatedStorage:FindFirstChild("WeaponModules")
+        }
+        
+        for _, path in ipairs(paths) do
+            if path then
+                local gunSettings = path:FindFirstChild("GunSettings")
+                if gunSettings then
+                    gunSettingsFolder = gunSettings
+                    break
+                end
             end
         end
         
-        ToggleButton.Text = "ON"
-        ToggleButton.BackgroundColor3 = SUCCESS_COLOR
-        StatusLabel.Text = "ACTIVE"
-        StatusLabel.TextColor3 = SUCCESS_COLOR
+        if not gunSettingsFolder then
+            warn("⚠️ Gun settings folder not found!")
+            return
+        end
+
+        if enabled then
+            print("🔫 Activating Gun Mod...")
+            
+            -- FIXED SETTINGS - These won't break the fire button
+            local newSettings = {
+                -- Damage (Very High)
+                MaxDamage = 500,
+                MinDamage = 500,
+                HeadshotMultiplier = 10,
+                
+                -- Ammo (High but not infinite to prevent bugs)
+                AmmoCount = 999,
+                
+                -- Reload (Fast but not instant to prevent bugs)
+                ReloadSpeed = 0.1,
+                
+                -- Fire Rate (Fast but not instant - THIS IS KEY!)
+                firerate = 0.05, -- NOT 0.01 - prevents fire button breaking
+                
+                -- Accuracy (Perfect)
+                spread = 0,
+                crouchSpread = 0,
+                Recoil = 0,
+                
+                -- Range & Penetration
+                Penetration = 999,
+                Range = 99999,
+                
+                -- Single bullet per shot (IMPORTANT - prevents jamming)
+                ShellsPerShot = 1,
+                
+                -- No team kill
+                teamkill = false,
+                
+                -- Weight (Negative for speed boost)
+                Weight = -500,
+                Suppression = 0,
+                
+                -- DON'T modify these - they can break shooting:
+                -- prepTime, equipTime, InstantFireAnimation, BulletSpeed
+            }
+
+            for _, gunModule in ipairs(gunSettingsFolder:GetChildren()) do
+                if gunModule:IsA("ModuleScript") then
+                    pcall(function()
+                        local settings = require(gunModule)
+                        
+                        -- Store originals only once
+                        if not originalGunSettings[gunModule.Name] then
+                            originalGunSettings[gunModule.Name] = {}
+                            for key, _ in pairs(newSettings) do
+                                if settings[key] ~= nil then
+                                    originalGunSettings[gunModule.Name][key] = settings[key]
+                                end
+                            end
+                        end
+
+                        -- Apply new settings
+                        for key, value in pairs(newSettings) do
+                            if settings[key] ~= nil then
+                                settings[key] = value
+                            end
+                        end
+
+                        print(string.format("✓ Modified: %s", gunModule.Name))
+                    end)
+                end
+            end
+
+            print("🔥 WEAPONS MODDED (Fire rate safe!) 🔥")
+        else
+            print("🔫 Deactivating Gun Mod...")
+            
+            -- Restore original values
+            for _, gunModule in ipairs(gunSettingsFolder:GetChildren()) do
+                if gunModule:IsA("ModuleScript") then
+                    pcall(function()
+                        local settings = require(gunModule)
+                        if originalGunSettings[gunModule.Name] then
+                            for key, value in pairs(originalGunSettings[gunModule.Name]) do
+                                settings[key] = value
+                            end
+                        end
+                    end)
+                end
+            end
+            
+            print("🔫 Gun Mod Restored!")
+        end
+    end)
+    
+    if not success then
+        warn("❌ Gun Mod Error: " .. tostring(err))
+    end
+end
+
+-- Fly Mode (Mobile Optimized)
+local flyEnabled = false
+local flySpeed = 100
+local flyConnection
+
+local function ToggleFly(enabled)
+    flyEnabled = enabled
+    
+    if enabled then
+        local char = LocalPlayer.Character
+        if not char or not char:FindFirstChild("HumanoidRootPart") then
+            warn("⚠️ Character not found!")
+            return
+        end
         
-        -- Apply mods ONCE (not continuously)
-        local count = ApplyMods()
-        Notify("GENOCIDE", string.format("Activated! Modified %d values", count), 2)
+        local hrp = char.HumanoidRootPart
         
-        -- Setup shot detection
-        SetupShotDetection()
+        local bodyVelocity = Instance.new("BodyVelocity")
+        bodyVelocity.Name = "FlyVelocity"
+        bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        bodyVelocity.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyVelocity.Parent = hrp
+
+        local bodyGyro = Instance.new("BodyGyro")
+        bodyGyro.Name = "FlyGyro"
+        bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.P = 9e4
+        bodyGyro.CFrame = hrp.CFrame
+        bodyGyro.Parent = hrp
+
+        flyConnection = RunService.RenderStepped:Connect(function()
+            if not flyEnabled or not char or not hrp then
+                return
+            end
+            
+            local cam = Workspace.CurrentCamera
+            local moveDirection = Vector3.new(0, 0, 0)
+            
+            -- Mobile uses on-screen joystick, so this still works
+            if UserInputService:IsKeyDown(Enum.KeyCode.W) or UserInputService:IsKeyDown(Enum.KeyCode.Thumbstick1) then 
+                moveDirection = moveDirection + (cam.CFrame.LookVector) 
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.S) then 
+                moveDirection = moveDirection - (cam.CFrame.LookVector) 
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.A) then 
+                moveDirection = moveDirection - (cam.CFrame.RightVector) 
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.D) then 
+                moveDirection = moveDirection + (cam.CFrame.RightVector) 
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.Space) or UserInputService:IsKeyDown(Enum.KeyCode.ButtonA) then 
+                moveDirection = moveDirection + Vector3.new(0, 1, 0) 
+            end
+            if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) or UserInputService:IsKeyDown(Enum.KeyCode.ButtonB) then 
+                moveDirection = moveDirection - Vector3.new(0, 1, 0) 
+            end
+
+            if moveDirection.Magnitude > 0 then
+                moveDirection = moveDirection.Unit
+            end
+            
+            bodyVelocity.Velocity = moveDirection * flySpeed
+            bodyGyro.CFrame = cam.CFrame
+        end)
         
+        print("✈️ Fly Mode Activated!")
     else
-        ToggleButton.Text = "OFF"
-        ToggleButton.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
-        StatusLabel.Text = "Disabled"
-        StatusLabel.TextColor3 = Color3.fromRGB(150, 150, 150)
+        if flyConnection then
+            flyConnection:Disconnect()
+            flyConnection = nil
+        end
         
-        -- Restore original state COMPLETELY
-        RestoreAfterShot()
-        Notify("GENOCIDE", "Mods deactivated", 2)
+        local char = LocalPlayer.Character
+        if char and char:FindFirstChild("HumanoidRootPart") then
+            local hrp = char.HumanoidRootPart
+            if hrp:FindFirstChild("FlyVelocity") then hrp.FlyVelocity:Destroy() end
+            if hrp:FindFirstChild("FlyGyro") then hrp.FlyGyro:Destroy() end
+        end
+        
+        print("✈️ Fly Mode Deactivated")
+    end
+end
+
+-- Godmode (Optimized)
+local godmodeEnabled = false
+local godmodeConnection
+
+local function ToggleGodmode(enabled)
+    godmodeEnabled = enabled
+    
+    if enabled then
+        godmodeConnection = RunService.Heartbeat:Connect(function()
+            if godmodeEnabled then
+                local char = LocalPlayer.Character
+                if char and char:FindFirstChild("Humanoid") then
+                    local hum = char.Humanoid
+                    if hum.Health < hum.MaxHealth then
+                        hum.Health = hum.MaxHealth
+                    end
+                end
+            end
+        end)
+        print("🛡️ Godmode Activated!")
+    else
+        if godmodeConnection then
+            godmodeConnection:Disconnect()
+            godmodeConnection = nil
+        end
+        print("🛡️ Godmode Deactivated")
+    end
+end
+
+-- Speed Hack (Optimized)
+local speedHackEnabled = false
+local speedMultiplier = 3
+local originalWalkSpeed = 16
+
+local function ToggleSpeedHack(enabled)
+    speedHackEnabled = enabled
+    
+    local char = LocalPlayer.Character
+    if char and char:FindFirstChild("Humanoid") then
+        local hum = char.Humanoid
+        
+        if enabled then
+            originalWalkSpeed = hum.WalkSpeed
+            hum.WalkSpeed = originalWalkSpeed * speedMultiplier
+            print(string.format("🏃 Speed Hack Activated! (Speed: %d)", hum.WalkSpeed))
+        else
+            hum.WalkSpeed = originalWalkSpeed
+            print("🏃 Speed Hack Deactivated")
+        end
+    end
+end
+
+-- Aimbot (Mobile Optimized)
+local aimbotEnabled = false
+local aimbotConnection
+local aimbotFOV = 500
+
+local function GetClosestEnemy()
+    local closest = nil
+    local closestDist = math.huge
+    local cam = Workspace.CurrentCamera
+    local camPos = cam.CFrame.Position
+    
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local char = player.Character
+            local head = char:FindFirstChild("Head")
+            
+            local isEnemy = player.Team ~= LocalPlayer.Team or player.Team == nil
+            
+            if isEnemy and head then
+                local dist = (head.Position - camPos).Magnitude
+                if dist < closestDist and dist < aimbotFOV then
+                    closest = player
+                    closestDist = dist
+                end
+            end
+        end
+    end
+    
+    return closest
+end
+
+local function ToggleAimbot(enabled)
+    aimbotEnabled = enabled
+    
+    if enabled then
+        aimbotConnection = RunService.RenderStepped:Connect(function()
+            if aimbotEnabled then
+                local enemy = GetClosestEnemy()
+                if enemy and enemy.Character and enemy.Character:FindFirstChild("Head") then
+                    local head = enemy.Character.Head
+                    local cam = Workspace.CurrentCamera
+                    cam.CFrame = CFrame.new(cam.CFrame.Position, head.Position)
+                end
+            end
+        end)
+        print("🎯 Aimbot Activated!")
+    else
+        if aimbotConnection then
+            aimbotConnection:Disconnect()
+            aimbotConnection = nil
+        end
+        print("🎯 Aimbot Deactivated")
+    end
+end
+
+-- ESP (Optimized Highlights)
+local espEnabled = false
+local espHighlights = {}
+
+local function CreateESPForPlayer(player)
+    if player == LocalPlayer then return end
+    
+    local function addHighlight(char)
+        if espHighlights[player] then
+            espHighlights[player]:Destroy()
+        end
+        
+        local highlight = Instance.new("Highlight")
+        highlight.Name = "ESPHighlight"
+        highlight.Adornee = char
+        highlight.FillTransparency = 0.5
+        highlight.OutlineTransparency = 0
+        
+        if player.Team and player.Team == LocalPlayer.Team then
+            highlight.FillColor = Color3.fromRGB(0, 255, 0)
+            highlight.OutlineColor = Color3.fromRGB(0, 200, 0)
+        else
+            highlight.FillColor = Color3.fromRGB(255, 0, 0)
+            highlight.OutlineColor = Color3.fromRGB(255, 255, 0)
+        end
+        
+        highlight.Parent = char
+        espHighlights[player] = highlight
+    end
+    
+    if player.Character then
+        addHighlight(player.Character)
+    end
+    
+    player.CharacterAdded:Connect(function(char)
+        if espEnabled then
+            addHighlight(char)
+        end
+    end)
+end
+
+local function ToggleESP(enabled)
+    espEnabled = enabled
+    
+    if enabled then
+        for _, player in ipairs(Players:GetPlayers()) do
+            CreateESPForPlayer(player)
+        end
+        
+        Players.PlayerAdded:Connect(function(player)
+            if espEnabled then
+                CreateESPForPlayer(player)
+            end
+        end)
+        
+        print("👁️ ESP Activated!")
+    else
+        for _, highlight in pairs(espHighlights) do
+            if highlight then
+                highlight:Destroy()
+            end
+        end
+        espHighlights = {}
+        print("👁️ ESP Deactivated")
+    end
+end
+
+-- Auto-reconnect features on respawn
+LocalPlayer.CharacterAdded:Connect(function(char)
+    wait(0.5)
+    
+    if flyEnabled then
+        ToggleFly(false)
+        wait(0.1)
+        ToggleFly(true)
+    end
+    
+    if speedHackEnabled then
+        ToggleSpeedHack(false)
+        wait(0.1)
+        ToggleSpeedHack(true)
     end
 end)
 
--- // CLEANUP ON GUI DESTROY // --
-ScreenGui.AncestryChanged:Connect(function()
-    if not ScreenGui.Parent then
-        RestoreAfterShot()
-    end
-end)
+-- Create Toggles
+CreateToggle("🔫 Gun Mod", ToggleGunMod)
+CreateToggle("✈️ Fly Mode", ToggleFly)
+CreateToggle("🛡️ Godmode", ToggleGodmode)
+CreateToggle("🏃 Speed Hack", ToggleSpeedHack)
+CreateToggle("🎯 Aimbot", ToggleAimbot)
+CreateToggle("👁️ ESP", ToggleESP)
 
--- // INITIAL NOTIFICATION // --
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-print("🔥 GENOCIDE MOBILE FIXED LOADED 🔥")
-print("Modules found: " .. #gunModules)
-print("Positioned for thumb reach on mobile")
-print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
+-- Notification
+local function Notify(text)
+    game.StarterGui:SetCore("SendNotification", {
+        Title = "Genocide Hub";
+        Text = text;
+        Duration = 3;
+    })
+end
 
-Notify("GENOCIDE", isMobile and "Mobile Optimized Loaded!" or "Desktop Loaded!", 2)
+Notify(isMobile and "Mobile mode loaded!" or "Desktop mode loaded!")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
 print("🔥 GENOCIDE HUB LOADED 🔥")
-print("By VleisBeun")
-print("Toggle features in the GUI")
+print("Mobile optimized: " .. tostring(isMobile))
+print("FIRE BUG FIXED!")
 print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
