@@ -80,7 +80,7 @@ This repository is for **educational purposes only**. The creator is not respons
 
 ## 📄 License
 
-This project is provided under the MIT License - see LICENSE file for details.
+This project is provided under the GNU License - see LICENSE file for details.
 
 ## 🤝 Contributing
 
